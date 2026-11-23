@@ -1,0 +1,30 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Desenvolvedora Front-end Júnior | Empresa X</title></head>
+<body>
+<h1>Desenvolvedora Front-end Júnior</h1>
+<p class="company-name">Empresa X</p>
+<div class="description">Vaga 100% remoto, CLT. Requisitos: React, TypeScript, HTML, CSS, Git, testes automatizados. Diferenciais: Next.js, acessibilidade, Figma.</div>
+<button id="apply" onclick="show(1)">Candidatar-se</button>
+<div id="s1" hidden>
+  <label for="nome">Nome completo *</label><input id="nome" required>
+  <label for="mail">E-mail *</label><input id="mail" type="email" required>
+  <label for="tel">Celular *</label><input id="tel" required>
+  <button onclick="if(check(1))show(2)">Próximo</button>
+</div>
+<div id="s2" hidden>
+  <label for="pret">Qual sua pretensão salarial? *</label><input id="pret" type="number" required>
+  <label for="exp">Tempo de experiência com React *</label>
+  <select id="exp" required><option value="">Selecione</option><option>Menos de 1 ano</option><option>1-2 anos</option><option>3-5 anos</option><option>Mais de 5 anos</option></select>
+  <div role="radiogroup" aria-labelledby="q3"><p id="q3">Você possui parentes ou amigos trabalhando na empresa? *</p>
+    <label><input type="radio" name="par" value="s" required> Sim</label>
+    <label><input type="radio" name="par" value="n"> Não</label></div>
+  <button onclick="if(check(2))show(3)">Próximo</button>
+</div>
+<div id="s3" hidden>
+  <p>Revise seus dados.</p>
+  <button onclick="document.body.innerHTML='<h2>Candidatura enviada com sucesso!</h2>'">Enviar candidatura</button>
+</div>
+<script>
+function show(n){ document.querySelectorAll('[id^=s]').forEach(d=>d.hidden=true); document.getElementById('apply').hidden=true; document.getElementById('s'+n).hidden=false; }
+function check(n){ const box=document.getElementById('s'+n); let ok=true; box.querySelectorAll('[required]').forEach(el=>{ const empty = el.type==='radio' ? !box.querySelector('input[name='+el.name+']:checked') : !el.value; el.setAttribute('aria-invalid', empty?'true':'false'); if(empty) ok=false;}); return ok; }
+</script>
+</body></html>
