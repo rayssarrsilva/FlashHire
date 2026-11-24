@@ -21,10 +21,10 @@ spreadsheet → link detection → open job (your Chrome profile) → read job �
 ```
 
 ## Tech stack
-TypeScript (strict) · Node.js · Playwright (real Chrome, persistent profile) · Fastify · SQLite (node:sqlite, built into Node) · React 19 + Vite · Zod · AES-256-GCM + scrypt · Vitest · GitHub Actions · Dependabot
+TypeScript (strict) · Node.js · Playwright (Edge or Chrome, own persistent profile) · Fastify · SQLite (node:sqlite, built into Node) · React 19 + Vite · Zod · AES-256-GCM + scrypt · Vitest · GitHub Actions · Dependabot
 
 ## Run it
-Requirements: Node.js 22.13+ and Google Chrome.
+Requirements: Node.js 22.13+ and Microsoft Edge or Google Chrome.
 ```bash
 git clone https://github.com/rayssarrsilva/FlashHire.git
 cd FlashHire
@@ -33,7 +33,7 @@ npm start
 ```
 On Windows you can double-click `INICIAR-FlashHire.bat`. The app opens at http://127.0.0.1:4173 and only your computer can reach it.
 
-First run: create a master password → add your résumés → import your answer bank → (optional) paste free AI keys in Settings → add job links → **Start**. A Chrome window opens: sign in to LinkedIn, Gupy and Indeed once, when asked.
+First run: create a master password → add your résumés → import your answer bank → (optional) paste free AI keys in Settings → add job links → **Start**. A browser window (Edge or Chrome) opens: sign in to LinkedIn, Gupy and Indeed once, when asked.
 
 ## Tests
 ```bash
@@ -62,7 +62,7 @@ O FlashHire é um assistente local que se candidata às vagas por você. Você e
 - **Resultados por site:** candidaturas, entrevistas e taxa de entrevista.
 
 ## Como rodar
-Precisa de Node.js 22.13+ e Google Chrome. Veja os comandos acima ou dê dois cliques em `INICIAR-FlashHire.bat` no Windows.
+Precisa de Node.js 22.13+ e do Microsoft Edge ou do Google Chrome. Veja os comandos acima ou dê dois cliques em `INICIAR-FlashHire.bat` no Windows.
 
 ## Uso responsável
 Ritmo humano e limites diários. No LinkedIn, Glassdoor e Indeed, cujos termos proíbem envio automático, o FlashHire prepara tudo e **você** clica em "Enviar". Ele não burla captcha nem detecção de robôs.

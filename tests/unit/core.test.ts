@@ -250,3 +250,12 @@ describe('cover letter template', () => {
     expect(letterLooksOk('curta demais')).toBe(false);
   });
 });
+
+import { channelsToTry } from '../../src/browser/session';
+describe('browser choice', () => {
+  it('auto prefers Edge on Windows, then Chrome', () => {
+    expect(channelsToTry('auto', 'win32')).toEqual(['msedge', 'chrome']);
+    expect(channelsToTry('auto', 'linux')).toEqual(['chrome', 'msedge']);
+    expect(channelsToTry('msedge', 'win32')).toEqual(['msedge']);
+  });
+});

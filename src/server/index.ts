@@ -23,7 +23,7 @@ const store = new Store(join(DATA, 'flashhire.db'));
 store.requeueInterrupted();
 const engine = new Engine(store, {
   dataDir: DATA,
-  browser: { channel: (process.env.FLASHHIRE_BROWSER as 'chrome' | 'msedge' | undefined) ?? 'chrome', executablePath: process.env.CHROME_PATH },
+  browser: { channel: process.env.FLASHHIRE_BROWSER as 'chrome' | 'msedge' | undefined, executablePath: process.env.CHROME_PATH },
 });
 
 const app = Fastify({ bodyLimit: 12 * 1024 * 1024, logger: false });
@@ -238,6 +238,7 @@ const SettingsBody = z.object({
   onsiteMinSalaryBRL: z.number().min(0),
   geminiModel: z.string().min(1).max(80),
   groqModel: z.string().min(1).max(80),
+  browser: z.enum(['auto', 'msedge', 'chrome']),
 });
 app.put('/api/settings', { preHandler: needUnlocked }, async (req) => {
   store.setJson('settings', { ...DEFAULT_SETTINGS, ...SettingsBody.partial().parse(req.body) });

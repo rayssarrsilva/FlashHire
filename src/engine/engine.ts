@@ -18,7 +18,7 @@ import { runApplication, type UserReply, type WaitKind } from '../browser/apply'
 import type { FoundField } from '../browser/dom';
 import { extractJob } from '../browser/extract';
 import { NORMAL_PACE, pause, type Pace } from '../browser/human';
-import { htmlToPdf, openContext, resumeToPdf, type BrowserOptions } from '../browser/session';
+import { browserName, htmlToPdf, openContext, resumeToPdf, type BrowserChoice, type BrowserOptions } from '../browser/session';
 
 export interface Settings extends MatchSettings {
   maxParallel: number;
@@ -29,6 +29,7 @@ export interface Settings extends MatchSettings {
   tailor: boolean;
   geminiModel: string;
   groqModel: string;
+  browser: BrowserChoice;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -41,6 +42,7 @@ export const DEFAULT_SETTINGS: Settings = {
   tailor: true,
   geminiModel: DEFAULT_MODELS.gemini,
   groqModel: DEFAULT_MODELS.groq,
+  browser: 'auto',
 };
 
 export interface PendingQuestion {
@@ -74,7 +76,7 @@ export interface EngineOptions {
   dataDir: string;
   browser: Omit<BrowserOptions, 'profileDir'>;
   pace?: Pace;
-  /** For tests: use an existing context instead of opening Chrome. */
+  /** For tests: use an existing context instead of opening a browser. */
   context?: BrowserContext;
 }
 
@@ -132,7 +134,8 @@ export class Engine extends EventEmitter {
     if (!this.store.isUnlocked) throw new Error('Desbloqueie o cofre primeiro.');
     if (this.store.resumes().length === 0) throw new Error('Adicione pelo menos 1 currículo.');
     if (!this.ctx) {
-      this.ctx = await openContext({ ...this.opts.browser, profileDir: join(this.opts.dataDir, 'chrome-profile') });
+      this.ctx = await openContext({ ...this.opts.browser, channel: this.opts.browser.channel ?? this.settings.browser, profileDir: join(this.opts.dataDir, 'browser-profiles') });
+      this.emit('notice', `Abri o ${browserName()} do FlashHire. Na primeira vez, faça login nele no LinkedIn, na Gupy e no Indeed.`);
       this.ctx.on('close', () => {
         this.ctx = null;
         this.running = false;
@@ -205,10 +208,10 @@ export class Engine extends EventEmitter {
   }
 
   /**
-   * Brings the job's tab AND its Chrome window to the front. bringToFront() alone only
-   * switches tabs inside Chrome; Windows keeps the window behind the dashboard.
+   * Brings the job's tab AND its browser window to the front. bringToFront() alone only
+   * switches tabs inside the browser; Windows keeps the window behind the dashboard.
    */
-  async focus(pendingId: string): Promise<{ title: string; url: string }> {
+  async focus(pendingId: string): Promise<{ title: string; url: string; browser: string }> {
     const w = this.waiters.get(pendingId);
     if (!w) throw new Error('Esta pendência já foi resolvida.');
     const page = w.page;
@@ -226,7 +229,7 @@ export class Engine extends EventEmitter {
     } catch {
       // Window control is not available (e.g. headless): the tab is still active.
     }
-    return { title: await page.title().catch(() => ''), url: page.url() };
+    return { title: await page.title().catch(() => ''), url: page.url(), browser: browserName() };
   }
 
   private waitUser(job: JobRow, kind: WaitKind, message: string, page: Page, fields: FoundField[] = [], suggestions: Record<string, string> = {}): Promise<UserReply> {

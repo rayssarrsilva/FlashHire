@@ -33,7 +33,7 @@ export interface Pending { id: string; jobId: number; jobTitle: string; company:
 export interface Settings {
   threshold: number; maxParallel: number; maxWaiting: number; dailyCap: number; linkedinDailyCap: number;
   autoSubmit: boolean; tailor: boolean; englishLevel: 'basic' | 'intermediate' | 'advanced' | 'fluent';
-  experienceYears: number; minSalaryBRL: number; onsiteMinSalaryBRL: number; geminiModel: string; groqModel: string;
+  experienceYears: number; minSalaryBRL: number; onsiteMinSalaryBRL: number; geminiModel: string; groqModel: string; browser: 'auto' | 'msedge' | 'chrome';
 }
 export interface State { setUp: boolean; unlocked: boolean; running: boolean; settings: Settings; appliedToday: number; pendings: Pending[]; ai: { gemini: boolean; groq: boolean }; resumes: number; bank: number }
 export interface Job {

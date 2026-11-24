@@ -191,8 +191,8 @@ function PendingCard({ p, onError, onInfo }: { p: Pending; onError: (e: unknown)
         <button
           className="ghost"
           onClick={() =>
-            api<{ title: string; url: string }>(`/pendings/${p.id}/focus`, 'POST')
-              .then((t) => onInfo(`Trouxe para a frente a janela do Chrome do FlashHire: "${t.title || t.url}". Se não apareceu, procure o ícone do Chrome na barra de tarefas.`))
+            api<{ title: string; url: string; browser: string }>(`/pendings/${p.id}/focus`, 'POST')
+              .then((t) => onInfo(`Trouxe para a frente a janela do ${t.browser} do FlashHire: "${t.title || t.url}". Se não apareceu, procure o ícone do ${t.browser} na barra de tarefas.`))
               .catch(onError)
           }
         >
@@ -684,6 +684,13 @@ function SettingsView({ state, onError, onSaved }: { state: State; onError: (e: 
           </Field>
           <Field label="Presencial fora de Uberaba/Uberlândia só acima de (R$)">
             <input type="number" min={0} value={s.onsiteMinSalaryBRL} onChange={num('onsiteMinSalaryBRL')} />
+          </Field>
+          <Field label="Navegador que o FlashHire usa">
+            <select value={s.browser} onChange={(e) => setS({ ...s, browser: e.target.value as Settings['browser'] })}>
+              <option value="auto">Automático (Edge no Windows)</option>
+              <option value="msedge">Microsoft Edge</option>
+              <option value="chrome">Google Chrome</option>
+            </select>
           </Field>
           <Field label="Seu nível de inglês">
             <select value={s.englishLevel} onChange={(e) => setS({ ...s, englishLevel: e.target.value as Settings['englishLevel'] })}>
