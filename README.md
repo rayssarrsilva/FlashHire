@@ -21,10 +21,10 @@ spreadsheet → link detection → open job (your Chrome profile) → read job �
 ```
 
 ## Tech stack
-TypeScript (strict) · Node.js · Playwright (real Chrome, persistent profile) · Fastify · SQLite (better-sqlite3) · React 19 + Vite · Zod · AES-256-GCM + scrypt · Vitest · GitHub Actions · Dependabot
+TypeScript (strict) · Node.js · Playwright (real Chrome, persistent profile) · Fastify · SQLite (node:sqlite, built into Node) · React 19 + Vite · Zod · AES-256-GCM + scrypt · Vitest · GitHub Actions · Dependabot
 
 ## Run it
-Requirements: Node.js 20.11+ and Google Chrome.
+Requirements: Node.js 22.13+ and Google Chrome.
 ```bash
 git clone https://github.com/rayssarrsilva/FlashHire.git
 cd FlashHire
@@ -62,7 +62,7 @@ O FlashHire é um assistente local que se candidata às vagas por você. Você e
 - **Resultados por site:** candidaturas, entrevistas e taxa de entrevista.
 
 ## Como rodar
-Precisa de Node.js 20.11+ e Google Chrome. Veja os comandos acima ou dê dois cliques em `INICIAR-FlashHire.bat` no Windows.
+Precisa de Node.js 22.13+ e Google Chrome. Veja os comandos acima ou dê dois cliques em `INICIAR-FlashHire.bat` no Windows.
 
 ## Uso responsável
 Ritmo humano e limites diários. No LinkedIn, Glassdoor e Indeed, cujos termos proíbem envio automático, o FlashHire prepara tudo e **você** clica em "Enviar". Ele não burla captcha nem detecção de robôs.

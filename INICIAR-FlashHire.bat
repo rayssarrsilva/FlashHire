@@ -1,6 +1,6 @@
 @echo off
 cd /d "%~dp0"
-if not exist node_modules (
+if not exist node_modules\fastify (
   echo Instalando o FlashHire pela primeira vez...
   set PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
   call npm ci

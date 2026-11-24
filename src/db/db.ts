@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { CHECK_VALUE, decrypt, deriveKey, encrypt, newSalt, verifyKey } from '../core/crypto';
@@ -89,12 +89,12 @@ CREATE INDEX IF NOT EXISTS jobs_status ON jobs(status);
 `;
 
 export class Store {
-  readonly db: Database.Database;
+  readonly db: DatabaseSync;
   private key: Buffer | null = null;
 
   constructor(file: string) {
     if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
-    this.db = new Database(file);
+    this.db = new DatabaseSync(file);
     this.db.exec(SCHEMA);
   }
 
@@ -297,7 +297,7 @@ export class Store {
     }
     if (patch.applied) cols.push("applied_at = datetime('now')");
     cols.push("updated_at = datetime('now')");
-    this.db.prepare(`UPDATE jobs SET ${cols.join(', ')} WHERE id = ?`).run(...vals, id);
+    this.db.prepare(`UPDATE jobs SET ${cols.join(', ')} WHERE id = ?`).run(...(vals as SQLInputValue[]), id);
   }
 
   log(id: number, msg: string): void {
