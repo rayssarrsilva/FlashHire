@@ -1,0 +1,14 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Desenvolvedora Front-end Júnior | Empresa W</title></head>
+<body>
+<h1>Desenvolvedora Front-end Júnior</h1><p class="company-name">Empresa W</p>
+<div class="description">Remoto. React, TypeScript, HTML, CSS, Git, Jest.</div>
+<div id="s1">
+  <label for="em">E-mail *</label><input id="em" required>
+  <label for="time">Qual seu time do coração? *</label><input id="time" required>
+  <button id="go" onclick="if(document.getElementById('time').value){document.getElementById('s1').hidden=true;document.getElementById('s2').hidden=false}">Prosseguir para etapa 2</button>
+</div>
+<div id="s2" hidden>
+  <p>Tudo certo.</p>
+  <button onclick="document.body.innerHTML='<h2>Inscrição enviada!</h2>'">Mandar meus dados</button>
+</div>
+</body></html>

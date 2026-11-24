@@ -274,3 +274,13 @@ describe('"(opcional)" convention (Indeed, LinkedIn, Lever)', () => {
     expect(applyOptionalConvention([{ label: 'Nome', required: false }])[0]!.required).toBe(false);
   });
 });
+
+describe('company sites keep the job id from the query', () => {
+  it('different ?gh_jid are different jobs; tracking params are ignored', () => {
+    const a = detectSite('https://acme.com/careers?gh_jid=1&utm_source=x');
+    const b = detectSite('https://acme.com/careers?gh_jid=2');
+    const c = detectSite('https://acme.com/careers?gh_jid=1');
+    expect(a.jobKey).not.toBe(b.jobKey);
+    expect(a.jobKey).toBe(c.jobKey);
+  });
+});

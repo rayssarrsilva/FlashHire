@@ -157,6 +157,45 @@ describe('FlashHire engine on local pages', () => {
     expect(log).not.toMatch(/O quê|Onde/);
   });
 
+  it('learns from what she does in the tab and needs no help the next time', async () => {
+    const { store, engine } = makeEngine();
+    const pendings: Pending[] = [];
+    engine.on('pending', (p: Pending) => pendings.push(p));
+    engine.addLinks([`${base}/learn.html?a`]);
+    await engine.start();
+    const tab = () => ctx.pages().find((p) => p.url().includes('learn.html?a'))!;
+
+    // 1) Unknown question: she answers right in the tab.
+    const q = await until(() => pendings.find((p) => p.kind === 'questions'));
+    await tab().locator('#time').fill('Flamengo');
+    await tab().locator('#time').press('Tab');
+    engine.reply(q.id, { done: 'continue' });
+    // 2) Unknown "next" button: she clicks it.
+    const m1 = await until(() => pendings.find((p) => p.kind === 'manual'));
+    await tab().getByText('Prosseguir para etapa 2').click();
+    engine.reply(m1.id, { done: 'continue' });
+    // 3) Unknown "send" button: she clicks it.
+    const m2 = await until(() => pendings.find((p) => p.kind === 'manual' && p.id !== m1.id));
+    await tab().getByText('Mandar meus dados').click();
+    engine.reply(m2.id, { done: 'submitted' });
+    await until(() => store.jobs()[0]!.status === 'submitted');
+    expect(store.bank().find((b) => b.questionPt === 'Qual seu time do coração? *')?.answer).toBe('Flamengo');
+
+    // Next job on the same site: fully automatic.
+    const before = pendings.length;
+    const engine2 = new Engine(store, { dataDir, browser: { executablePath: CHROME }, pace: TEST_PACE, context: ctx });
+    engine2.on('pending', (p: Pending) => pendings.push(p));
+    engine2.addLinks([`${base}/learn.html?b`]);
+    await engine2.start();
+    const job2 = await until(() => {
+      const j = store.jobs().find((x) => x.url.endsWith('?b'))!;
+      return done(j.status) && j;
+    });
+    expect(job2.status).toBe('submitted');
+    expect(pendings.length).toBe(before);
+    expect(store.statsBySite()[0]!.autonomous).toBe(1);
+  });
+
   it('skips jobs below the threshold or blocked by the on-site rule, and never applies twice', async () => {
     const { store, engine } = makeEngine({ threshold: 101 });
     const r = engine.addLinks([`${base}/ats-single.html`, `${base}/ats-single.html`]);

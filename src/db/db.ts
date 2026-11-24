@@ -318,14 +318,29 @@ export class Store {
     return (this.db.prepare(sql).get(...(site ? [site] : [])) as { n: number }).n;
   }
 
-  statsBySite(): { site: string; total: number; submitted: number; interviews: number }[] {
+  statsBySite(): { site: string; total: number; submitted: number; interviews: number; autonomous: number }[] {
     return this.db
       .prepare(
-        "SELECT site, COUNT(*) AS total, SUM(status = 'submitted') AS submitted, SUM(interview) AS interviews FROM jobs WHERE status <> 'duplicate' GROUP BY site ORDER BY submitted DESC",
+        `SELECT site, COUNT(*) AS total, SUM(status = 'submitted') AS submitted, SUM(interview) AS interviews,
+         SUM(status = 'submitted' AND ${NO_HELP}) AS autonomous
+         FROM jobs WHERE status <> 'duplicate' GROUP BY site ORDER BY submitted DESC`,
       )
-      .all() as { site: string; total: number; submitted: number; interviews: number }[];
+      .all() as { site: string; total: number; submitted: number; interviews: number; autonomous: number }[];
+  }
+
+  /** Week by week: how many applications went out and how many needed no help (the final click does not count). */
+  statsByWeek(): { week: string; submitted: number; autonomous: number }[] {
+    return this.db
+      .prepare(
+        `SELECT strftime('%Y-%W', applied_at, 'localtime') AS week, COUNT(*) AS submitted, SUM(${NO_HELP}) AS autonomous
+         FROM jobs WHERE status = 'submitted' AND applied_at IS NOT NULL GROUP BY week ORDER BY week DESC LIMIT 12`,
+      )
+      .all() as { week: string; submitted: number; autonomous: number }[];
   }
 }
+
+/** A job needed help when it waited for a login, captcha, question or unknown step. */
+const NO_HELP = "(log NOT LIKE '%Sua vez (login)%' AND log NOT LIKE '%Sua vez (captcha)%' AND log NOT LIKE '%Sua vez (questions)%' AND log NOT LIKE '%Sua vez (manual)%')";
 
 function toJob(r: Record<string, unknown>): JobRow {
   return {

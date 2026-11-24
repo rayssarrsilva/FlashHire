@@ -15,7 +15,8 @@ import { normalize } from '../core/text';
 import type { JobAnalysis, JobInfo, ResolvedAnswer, ResumeRecord } from '../core/types';
 import type { JobRow, Store } from '../db/db';
 import { runApplication, type UserReply, type WaitKind } from '../browser/apply';
-import type { FoundField } from '../browser/dom';
+import { isIgnorableButton, isKnownButton, setLearnedButtons, type FoundField } from '../browser/dom';
+import { lessonsFrom, startRecording, stopRecording } from '../browser/recorder';
 import { extractJob } from '../browser/extract';
 import { NORMAL_PACE, pause, type Pace } from '../browser/human';
 import { browserName, htmlToPdf, openContext, resumeToPdf, type BrowserChoice, type BrowserOptions } from '../browser/session';
@@ -30,6 +31,8 @@ export interface Settings extends MatchSettings {
   geminiModel: string;
   groqModel: string;
   browser: BrowserChoice;
+  /** Learn from what the candidate does in the tabs that wait for her. */
+  learn: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -43,6 +46,7 @@ export const DEFAULT_SETTINGS: Settings = {
   geminiModel: DEFAULT_MODELS.gemini,
   groqModel: DEFAULT_MODELS.groq,
   browser: 'auto',
+  learn: true,
 };
 
 export interface PendingQuestion {
@@ -94,6 +98,7 @@ export class Engine extends EventEmitter {
     super();
     this.pace = opts.pace ?? NORMAL_PACE;
     this.ctx = opts.context ?? null;
+    setLearnedButtons(this.store.getJson('learned.buttons', {} as Record<string, { submit: string[]; next: string[] }>));
   }
 
   get settings(): Settings {
@@ -184,6 +189,8 @@ export class Engine extends EventEmitter {
   reply(pendingId: string, reply: UserReply & { save?: boolean }): void {
     const w = this.waiters.get(pendingId);
     if (!w) throw new Error('Esta pendência já foi resolvida.');
+    const learned = this.learnFrom(w, reply);
+    if (learned) this.store.log(w.pending.jobId, learned);
     if (reply.answers && reply.save !== false) {
       for (const f of w.fields) {
         const v = reply.answers[f.id];
@@ -211,6 +218,40 @@ export class Engine extends EventEmitter {
    * Brings the job's tab AND its browser window to the front. bringToFront() alone only
    * switches tabs inside the browser; Windows keeps the window behind the dashboard.
    */
+  /** Saves what the candidate answered and clicked in the tab, so the next job needs her less. */
+  private learnFrom(w: Waiter, reply: UserReply): string | null {
+    const events = stopRecording(w.page);
+    if (!this.settings.learn || events.length === 0) return null;
+    const lessons = lessonsFrom(events, reply.done === 'submitted', isKnownButton, isIgnorableButton);
+    const bank = this.store.bank();
+    const viaInbox = new Set(w.fields.filter((f) => reply.answers?.[f.id]).map((f) => normalize(f.label)));
+    let answers = 0;
+    for (const a of lessons.answers) {
+      if (a.label.length < 2 || viaInbox.has(normalize(a.label))) continue;
+      const known = bank.find((b) => normalize(b.questionPt) === normalize(a.label) || b.variants.some((v) => normalize(v) === normalize(a.label)));
+      if (known && normalize(known.answer) === normalize(a.value)) continue;
+      const sensitive = SENSITIVE_LABEL.test(normalize(a.label));
+      this.store.upsertBank({ key: `learned.${hash(a.label)}`, questionPt: a.label, questionEn: a.label, kind: sensitive ? 'Sensível' : 'Aprendida', answer: a.value, variants: [a.label] });
+      answers++;
+    }
+    const all = this.store.getJson('learned.buttons', {} as Record<string, { submit: string[]; next: string[] }>);
+    let buttons = 0;
+    for (const b of lessons.buttons) {
+      const entry = (all[b.host] ??= { submit: [], next: [] });
+      const t = normalize(b.text);
+      if (!entry[b.kind].includes(t)) {
+        entry[b.kind].push(t);
+        buttons++;
+      }
+    }
+    if (buttons) {
+      this.store.setJson('learned.buttons', all);
+      setLearnedButtons(all);
+    }
+    if (!answers && !buttons) return null;
+    return `Aprendi com você: ${answers} resposta(s) e ${buttons} botão(ões). Da próxima vez faço sozinho.`;
+  }
+
   async focus(pendingId: string): Promise<{ title: string; url: string; browser: string }> {
     const w = this.waiters.get(pendingId);
     if (!w) throw new Error('Esta pendência já foi resolvida.');
@@ -251,14 +292,15 @@ export class Engine extends EventEmitter {
       createdAt: new Date().toISOString(),
     };
     this.store.updateJob(job.id, { status: kind === 'submit' ? 'ready' : 'waiting' });
-    this.store.log(job.id, `Sua vez: ${message}`);
-    return new Promise<UserReply>((resolve) => {
+    this.store.log(job.id, `Sua vez (${kind}): ${message}`);
+    const recording = this.settings.learn ? startRecording(page).catch(() => {}) : Promise.resolve();
+    return recording.then(() => new Promise<UserReply>((resolve) => {
       this.waiters.set(pending.id, { pending, page, fields, resolve });
       this.active--; // a job waiting for the candidate frees its slot: the next one starts now
       this.emit('pending', pending);
       this.emit('change');
       this.pump();
-    }).then((r) => {
+    })).then((r) => {
       this.active++;
       this.store.updateJob(job.id, { status: 'running' });
       return r;
@@ -390,7 +432,7 @@ export class Engine extends EventEmitter {
     if (!f.required || !c.ai.enabled) return null;
     const facts = [
       c.resume.text,
-      ...c.bank.filter((b) => !isSensitiveKey(b.key) && b.answer).map((b) => `${b.questionPt || b.questionEn}: ${b.answer}`),
+      ...c.bank.filter((b) => !isSensitiveKey(b.key) && b.kind !== 'Sensível' && b.answer).map((b) => `${b.questionPt || b.questionEn}: ${b.answer}`),
     ].join('\n');
     const p = answerPrompt({
       question: f.label,
@@ -451,6 +493,8 @@ export class Engine extends EventEmitter {
     return 'Direct, short sentences, concrete facts, correct grammar, no slang, no clichés.';
   }
 }
+
+const SENSITIVE_LABEL = /\b(cpf|rg|identidade|nascimento|birth|endereco|address|rua|cep|zip|passaporte|passport|ssn|social security|banco|bank|agencia|conta corrente|account number|pis|ctps|titulo de eleitor)\b/;
 
 function hash(s: string): string {
   return createHash('sha256').update(normalize(s)).digest('hex').slice(0, 16);

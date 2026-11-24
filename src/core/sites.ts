@@ -102,14 +102,17 @@ export function detectSite(rawUrl: string): SiteInfo {
     [/remoteok\.(com|io)$/, 'remoteok'],
     [/wellfound\.com$|angel\.co$/, 'wellfound'],
   ];
-  for (const [re, site] of simple) {
-    if (re.test(host)) {
-      const clean = new URL(url.href);
-      for (const p of ['gh_src', 'utm_source', 'utm_medium', 'utm_campaign', 'ref', 'source']) clean.searchParams.delete(p);
-      return base(site, clean.href, 'direct', `${site}:${clean.host}${clean.pathname}`);
-    }
+  const clean = new URL(url.href);
+  for (const p of [...clean.searchParams.keys()]) {
+    if (/^(utm_|gh_src$|ref$|source$|src$|trk|tracking|fbclid$|gclid$|lever-source|jobboardsource$)/i.test(p)) clean.searchParams.delete(p);
   }
-  return base('other', url.href, 'direct', `other:${url.host}${url.pathname}`);
+  clean.hash = '';
+  const key = `${clean.host}${clean.pathname}${clean.search}`;
+  for (const [re, site] of simple) {
+    if (re.test(host)) return base(site, clean.href, 'direct', `${site}:${key}`);
+  }
+  // Company sites often keep the job id in the query (?gh_jid=123, ?jobId=9), so it stays in the key.
+  return base('other', clean.href, 'direct', `other:${key}`);
 }
 
 function base(site: SiteId, openUrl: string, variant: SiteInfo['variant'], jobKey: string | null, warning?: string): SiteInfo {

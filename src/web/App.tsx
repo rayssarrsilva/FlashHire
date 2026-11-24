@@ -409,7 +409,8 @@ function Bank({ tick, onError, onInfo }: { tick: number; onError: (e: unknown) =
   const shown = useMemo(() => {
     const t = q.toLowerCase();
     const list = t ? entries.filter((e) => `${e.questionPt} ${e.questionEn} ${e.answer}`.toLowerCase().includes(t)) : entries;
-    return [...list].sort((a, b) => Number(b.kind === 'IA') - Number(a.kind === 'IA'));
+    const review = (e: BankEntry) => Number(e.kind === 'IA' || e.kind === 'Aprendida' || e.kind === 'Sensível');
+    return [...list].sort((a, b) => review(b) - review(a));
   }, [entries, q]);
   const imported = (r: { imported: number; needsWrittenAnswer: string[]; empty: number }) => {
     onInfo(`${r.imported} resposta(s) importada(s).${r.needsWrittenAnswer.length ? ` Precisam de resposta escrita: ${r.needsWrittenAnswer.join('; ')}` : ''}`);
@@ -479,10 +480,12 @@ function BankItem({ e, onError, onChange }: { e: BankEntry; onError: (e: unknown
   const [answerEn, setAnswerEn] = useState(e.answerEn ?? '');
   const dirty = answer !== e.answer || answerEn !== (e.answerEn ?? '');
   return (
-    <article className={`card bank ${e.kind === 'IA' ? 'review' : ''}`}>
+    <article className={`card bank ${['IA', 'Aprendida', 'Sensível'].includes(e.kind) ? 'review' : ''}`}>
       <div className="row">
         <strong>{e.questionPt || e.questionEn}</strong>
         {e.kind === 'IA' && <span className="pill">Escrita pela IA: revise</span>}
+        {e.kind === 'Aprendida' && <span className="pill">Aprendida com você: confira</span>}
+        {e.kind === 'Sensível' && <span className="pill">Aprendida · dado pessoal (nunca vai para a IA)</span>}
       </div>
       <div className="grid2">
         <label>
@@ -495,8 +498,11 @@ function BankItem({ e, onError, onChange }: { e: BankEntry; onError: (e: unknown
         </label>
       </div>
       <div className="actions">
-        <button disabled={!dirty && e.kind !== 'IA'} onClick={() => api(`/bank/${e.id}`, 'PUT', { answer, answerEn: answerEn || null }).then(onChange).catch(onError)}>
-          {e.kind === 'IA' && !dirty ? 'Aprovar' : 'Salvar'}
+        <button
+          disabled={!dirty && !['IA', 'Aprendida'].includes(e.kind)}
+          onClick={() => api(`/bank/${e.id}`, 'PUT', { answer, answerEn: answerEn || null }).then(onChange).catch(onError)}
+        >
+          {['IA', 'Aprendida'].includes(e.kind) && !dirty ? 'Aprovar' : 'Salvar'}
         </button>
         <button className="ghost" onClick={() => api(`/bank/${e.id}`, 'DELETE').then(onChange).catch(onError)}>
           Excluir
@@ -585,12 +591,17 @@ function Resumes({ onError, onChange }: { onError: (e: unknown) => void; onChang
 }
 
 function Results({ tick }: { tick: number }) {
-  const [rows, setRows] = useState<{ site: string; total: number; submitted: number; interviews: number }[]>([]);
+  type Site = { site: string; total: number; submitted: number; interviews: number; autonomous: number };
+  type Week = { week: string; submitted: number; autonomous: number };
+  const [data, setData] = useState<{ bySite: Site[]; byWeek: Week[] }>({ bySite: [], byWeek: [] });
   useEffect(() => {
-    api<typeof rows>('/stats').then(setRows).catch(() => {});
+    api<typeof data>('/stats').then(setData).catch(() => {});
   }, [tick]);
+  const rows = data.bySite;
   const sent = rows.reduce((a, r) => a + r.submitted, 0);
   const iv = rows.reduce((a, r) => a + r.interviews, 0);
+  const auto = rows.reduce((a, r) => a + r.autonomous, 0);
+  const pct = (a: number, b: number) => (b ? `${((a / b) * 100).toFixed(1)}%` : '—');
   return (
     <div className="stack">
       <section className="kpis">
@@ -599,15 +610,45 @@ function Results({ tick }: { tick: number }) {
           <strong>{sent}</strong>
         </div>
         <div className="card kpi">
+          <span>Sem precisar de você</span>
+          <strong>{pct(auto, sent)}</strong>
+        </div>
+        <div className="card kpi">
           <span>Entrevistas</span>
           <strong>{iv}</strong>
         </div>
         <div className="card kpi">
           <span>Taxa de entrevista</span>
-          <strong>{sent ? `${((iv / sent) * 100).toFixed(1)}%` : '—'}</strong>
+          <strong>{pct(iv, sent)}</strong>
         </div>
       </section>
-      <p className="muted small">Marque "Entrevista" na fila quando uma empresa chamar. Com o tempo, esta tabela mostra quais sites dão mais retorno para você.</p>
+      <p className="muted small">
+        "Sem precisar de você" conta as candidaturas que não pediram login, captcha, pergunta nem etapa desconhecida (o clique final do LinkedIn, Glassdoor e Indeed não conta). Cada vez que você
+        resolve algo numa aba, eu aprendo, e esse número sobe. Marque "Entrevista" na fila quando uma empresa chamar.
+      </p>
+      {data.byWeek.length > 0 && (
+        <div className="table-wrap">
+          <table>
+            <caption className="small muted">Evolução por semana</caption>
+            <thead>
+              <tr>
+                <th>Semana</th>
+                <th>Enviadas</th>
+                <th>Sem precisar de você</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.byWeek.map((w) => (
+                <tr key={w.week}>
+                  <td>{w.week}</td>
+                  <td>{w.submitted}</td>
+                  <td>{pct(w.autonomous, w.submitted)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       <div className="table-wrap">
         <table>
           <thead>
@@ -615,8 +656,9 @@ function Results({ tick }: { tick: number }) {
               <th>Site</th>
               <th>Vagas</th>
               <th>Enviadas</th>
+              <th>Sem ajuda</th>
               <th>Entrevistas</th>
-              <th>Taxa</th>
+              <th>Taxa de entrevista</th>
             </tr>
           </thead>
           <tbody>
@@ -625,8 +667,9 @@ function Results({ tick }: { tick: number }) {
                 <td>{r.site}</td>
                 <td>{r.total}</td>
                 <td>{r.submitted}</td>
+                <td>{pct(r.autonomous, r.submitted)}</td>
                 <td>{r.interviews}</td>
-                <td>{r.submitted ? `${((r.interviews / r.submitted) * 100).toFixed(1)}%` : '—'}</td>
+                <td>{pct(r.interviews, r.submitted)}</td>
               </tr>
             ))}
           </tbody>
@@ -706,6 +749,9 @@ function SettingsView({ state, onError, onSaved }: { state: State; onError: (e: 
         </label>
         <label className="check">
           <input type="checkbox" checked={s.tailor} onChange={(e) => setS({ ...s, tailor: e.target.checked })} /> Personalizar o currículo para cada vaga
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={s.learn} onChange={(e) => setS({ ...s, learn: e.target.checked })} /> Aprender com o que eu faço nas abas que esperam por mim (respostas e botões; senhas nunca)
         </label>
       </section>
       <section className="card">

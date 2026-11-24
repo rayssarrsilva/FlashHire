@@ -10,6 +10,7 @@ FlashHire is a local-first assistant that applies to jobs for you. You give it a
 - **Best résumé for each job:** up to 5 résumés; the best match is used. With a structured version, the résumé is tailored per job by reordering only what is already in it, auto-fitted to one page.
 - **Answer bank first, AI last:** contact data, salary expectations by role/regime/currency/period, "how did you hear about us", years per skill, yes/no screening questions. The AI (free Gemini or Groq tier) is only used for required questions the bank cannot answer, and never receives personal data. Every new answer you give is saved for next time.
 - **Cover letters** in the candidate's own writing style, with no invented facts.
+- **Learns from you:** while a job waits for you, FlashHire watches what you answer and which buttons you click in that tab (never passwords). Next time, on that site, it does it alone. The Results tab shows the share of applications that needed no help, week by week.
 - **Asynchronous by design:** jobs that wait for you free their slot, so the queue never stops.
 - **Results by source:** applications, interviews and interview rate per site.
 
@@ -58,6 +59,7 @@ O FlashHire é um assistente local que se candidata às vagas por você. Você e
 - **O melhor currículo para cada vaga:** até 5 currículos. Com a versão em dados, o currículo é personalizado reordenando só o que já está nele, em uma página.
 - **Banco de respostas primeiro, IA por último:** a IA (plano grátis do Gemini ou do Groq) só entra em perguntas obrigatórias que o banco não resolve, e nunca recebe dados pessoais. Toda resposta nova sua fica guardada.
 - **Carta de apresentação** no seu jeito de escrever, sem inventar nada.
+- **Aprende com você:** enquanto uma vaga espera por você, ele observa o que você responde e em quais botões clica naquela aba (senhas nunca). Da próxima vez, naquele site, faz sozinho. A aba Resultados mostra, semana a semana, quantas candidaturas saíram sem precisar de você.
 - **Assíncrono:** vaga que espera por você libera a vez, e a fila não para.
 - **Resultados por site:** candidaturas, entrevistas e taxa de entrevista.
 

@@ -275,6 +275,27 @@ async function fillCombobox(f: FoundField, value: string, pace: Pace): Promise<b
 
 export type ButtonKind = 'submit' | 'next' | 'apply';
 
+/** Buttons the candidate clicked to get past steps FlashHire did not know, per site. */
+const LEARNED = new Map<string, { submit: Set<string>; next: Set<string> }>();
+
+export function setLearnedButtons(data: Record<string, { submit: string[]; next: string[] }>): void {
+  LEARNED.clear();
+  for (const [host, v] of Object.entries(data)) LEARNED.set(host, { submit: new Set(v.submit), next: new Set(v.next) });
+}
+
+/** True when FlashHire already knows what this button does (built-in rules or learned). */
+export function isKnownButton(text: string, host: string): boolean {
+  const t = normalize(text);
+  if (SUBMIT.test(t) || NEXT.test(t) || APPLY.test(t)) return true;
+  const l = LEARNED.get(host);
+  return !!l && (l.next.has(t) || l.submit.has(t));
+}
+
+export function isIgnorableButton(text: string): boolean {
+  const t = normalize(text);
+  return t.length < 2 || t.length > 40 || NEVER.test(t) || /cookie|aceitar todos|accept all|fechar|close|menu|ajuda|help|idioma|language|sair|logout|perfil|profile/.test(t);
+}
+
 const SUBMIT = /^(enviar|enviar candidatura|enviar inscricao|submit|submit application|send application|send|finalizar|finalizar candidatura|concluir|concluir candidatura|confirmar candidatura|apply now and submit)\b/;
 const NEXT = /^(proximo|proxima|proxima etapa|next|continuar|continue|avancar|review|revisar|revisar candidatura|review your application|salvar e continuar|save and continue|seguir|ir para)\b/;
 const APPLY =
@@ -309,11 +330,19 @@ export async function findButton(page: Page, kinds: ButtonKind[], rootSelector: 
     } catch {
       continue;
     }
+    let host = '';
+    try {
+      host = new URL(frame.url()).host;
+    } catch {
+      /* about:blank */
+    }
+    const learned = LEARNED.get(host);
     for (const kind of kinds) {
       const re = kind === 'submit' ? SUBMIT : kind === 'next' ? NEXT : APPLY;
+      const known = kind === 'apply' ? undefined : learned?.[kind];
       const hit = found.find((b) => {
         const t = normalize(b.text);
-        return t.length < 60 && re.test(t) && !NEVER.test(t);
+        return t.length < 60 && !NEVER.test(t) && (re.test(t) || !!known?.has(t));
       });
       if (hit) return { kind, frame, id: hit.id, text: hit.text };
     }

@@ -126,7 +126,7 @@ app.get('/api/events', async (req, reply) => {
 
 // ---------- jobs ----------
 app.get('/api/jobs', { preHandler: needUnlocked }, async () => store.jobs());
-app.get('/api/stats', { preHandler: needUnlocked }, async () => store.statsBySite());
+app.get('/api/stats', { preHandler: needUnlocked }, async () => ({ bySite: store.statsBySite(), byWeek: store.statsByWeek() }));
 
 app.post('/api/jobs/links', { preHandler: needUnlocked }, async (req) => {
   const { text } = z.object({ text: z.string().max(200_000) }).parse(req.body);
@@ -185,7 +185,8 @@ app.put('/api/bank/:id', { preHandler: needUnlocked }, async (req) => {
   const b = z.object({ answer: z.string().min(1).max(5000), answerEn: z.string().max(5000).nullable().optional() }).parse(req.body);
   const e = store.bank().find((x) => x.id === id);
   if (!e) throw new Error('Resposta não encontrada');
-  store.upsertBank({ key: e.key, questionPt: e.questionPt, questionEn: e.questionEn, kind: e.kind === 'IA' ? 'Texto' : e.kind, answer: b.answer, answerEn: b.answerEn ?? null });
+  const kind = e.kind === 'IA' || e.kind === 'Aprendida' ? 'Texto' : e.kind;
+  store.upsertBank({ key: e.key, questionPt: e.questionPt, questionEn: e.questionEn, kind, answer: b.answer, answerEn: b.answerEn ?? null });
   return { ok: true };
 });
 app.delete('/api/bank/:id', { preHandler: needUnlocked }, async (req) => {
@@ -239,6 +240,7 @@ const SettingsBody = z.object({
   geminiModel: z.string().min(1).max(80),
   groqModel: z.string().min(1).max(80),
   browser: z.enum(['auto', 'msedge', 'chrome']),
+  learn: z.boolean(),
 });
 app.put('/api/settings', { preHandler: needUnlocked }, async (req) => {
   store.setJson('settings', { ...DEFAULT_SETTINGS, ...SettingsBody.partial().parse(req.body) });
