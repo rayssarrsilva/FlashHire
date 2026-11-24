@@ -138,6 +138,25 @@ describe('FlashHire engine on local pages', () => {
     expect(store.bank().some((b) => b.answer === 'Pipoca')).toBe(true);
   });
 
+  it('Indeed-like flow: ignores the search bar, follows "(opcional)" marks and asks only the one unknown required question', async () => {
+    const { store, engine } = makeEngine();
+    const pendings: Pending[] = [];
+    engine.on('pending', (p: Pending) => pendings.push(p));
+    engine.addLinks([`${base}/indeed-like.html`]);
+    await engine.start();
+    const q = await until(() => pendings.find((p) => p.kind === 'questions'));
+    expect(q.questions.map((x) => x.label)).toEqual(['Qual seu esporte favorito?']);
+    engine.reply(q.id, { done: 'continue', answers: { [q.questions[0]!.fieldId]: 'Vôlei' } });
+    const job = await until(() => {
+      const j = store.jobs()[0]!;
+      return done(j.status) && j;
+    });
+    expect(job.status).toBe('submitted');
+    const log = job.log.map((l) => l.msg).join('\n');
+    expect(log).toContain('Currículo anexado');
+    expect(log).not.toMatch(/O quê|Onde/);
+  });
+
   it('skips jobs below the threshold or blocked by the on-site rule, and never applies twice', async () => {
     const { store, engine } = makeEngine({ threshold: 101 });
     const r = engine.addLinks([`${base}/ats-single.html`, `${base}/ats-single.html`]);

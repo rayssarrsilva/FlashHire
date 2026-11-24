@@ -57,12 +57,17 @@ export async function runApplication(start: Page, h: ApplyHooks): Promise<ApplyO
     if (gate) return finishFromReply(gate, page);
     root = (await page.locator('[role="dialog"]:visible').count().catch(() => 0)) > 0 ? '[role="dialog"]' : null;
     const fields = (await findFields(page, root)).filter((f) => !/pesquis|search|buscar/.test(normalize(f.label)));
-    if (fields.length > 0 || (await findButton(page, ['submit', 'next'], root))) break;
-    const apply = await findButton(page, ['apply'], root);
-    if (!apply) break;
-    h.log(`Clicando em "${apply.text}"`);
+    // A step button means we are inside the application already.
+    if (await findButton(page, ['submit', 'next'], root)) break;
+    // Known apply buttons first (Indeed / Glassdoor), then any "Apply" / "Candidatar-se" text.
+    const known = page.locator('#indeedApplyButton:visible, [data-testid="indeedApplyButton"]:visible, [data-testid="easyApplyButton"]:visible, .jobs-apply-button:visible').first();
+    const apply = (await known.count().catch(() => 0)) > 0 ? null : await findButton(page, ['apply'], root);
+    if (!apply && (await known.count().catch(() => 0)) === 0) break; // no apply button: fill what is on the page
+    void fields;
+    h.log(`Clicando em "${apply?.text ?? (await known.innerText().catch(() => 'Candidatar-se')).trim()}"`);
     const popup = page.context().waitForEvent('page', { timeout: 8000 }).catch(() => null);
-    await clickTagged(apply.frame, apply.id);
+    if (apply) await clickTagged(apply.frame, apply.id);
+    else await known.click();
     const newPage = await popup;
     if (newPage) {
       page = newPage;
@@ -74,6 +79,9 @@ export async function runApplication(start: Page, h: ApplyHooks): Promise<ApplyO
 
   // 2) Fill step by step.
   let stuck = 0;
+  /** Questions the site refused to leave empty, even though they did not look required. */
+  const forceRequired = new Set<string>();
+  const signature = (fs: FoundField[]) => fs.map((f) => normalize(f.label)).sort().join('|');
   for (let step = 0; step < 25; step++) {
     const gate = await checkGates();
     if (gate) return finishFromReply(gate, page);
@@ -105,7 +113,7 @@ export async function runApplication(start: Page, h: ApplyHooks): Promise<ApplyO
           continue;
         }
       }
-      if (f.required || f.invalid) unresolved.push(f);
+      if (f.required || f.invalid || forceRequired.has(normalize(f.label))) unresolved.push(f);
     }
 
     if (unresolved.length > 0) {
@@ -156,8 +164,16 @@ export async function runApplication(start: Page, h: ApplyHooks): Promise<ApplyO
     }
 
     h.log(`Clicando em "${button.text}"`);
+    const before = signature(await findFields(page, root));
     await clickTagged(button.frame, button.id);
     await pause(h.pace.afterClick);
+    // Same empty questions still on screen after "Next": the site wants them answered.
+    const after = await findFields(page, root);
+    if (after.length > 0 && signature(after) === before) {
+      for (const f of after) forceRequired.add(normalize(f.label));
+      for (const l of await invalidFieldLabels(page)) forceRequired.add(normalize(l));
+      h.log('O site não avançou: tratando as perguntas vazias como obrigatórias');
+    }
   }
   const r = await h.waitUser('manual', 'Esta candidatura tem etapas demais para mim. Termine nesta aba e me diga como ficou.', page);
   return finishFromReply(r, page);

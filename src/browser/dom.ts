@@ -81,6 +81,9 @@ function scanFields(rootSelector: string | null): RawField[] {
     const t = (h.getAttribute('type') || h.tagName).toLowerCase();
     if (['hidden', 'submit', 'button', 'image', 'reset', 'search'].includes(t)) continue;
     if (h.disabled || h.readOnly) continue;
+    // Site search bars (job boards' "what / where" boxes) are not part of the application.
+    if (h.closest('header, nav, [role="search"], [role="banner"]')) continue;
+    if (/^(q|what|where|keywords?|location|l|text-input-what|text-input-where|search)$/i.test(h.name || h.id || '') && !h.required && !h.closest('[role="dialog"]')) continue;
     if (t === 'radio' || t === 'checkbox') {
       const key = `${t}:${h.name || labelFor(h)}`;
       const g = groups.get(key) ?? [];
@@ -183,7 +186,19 @@ export async function findFields(page: Page, rootSelector: string | null = null)
       // detached or cross-process frame mid-navigation → ignore this round
     }
   }
-  return all;
+  return applyOptionalConvention(all);
+}
+
+const OPTIONAL = /\((opcional|optional|facultativo)\)|\bopcional\s*$|\boptional\s*$/i;
+
+/**
+ * Many forms (Indeed, LinkedIn, Lever) mark only the OPTIONAL questions and leave the
+ * required ones unmarked, without the `required` attribute. When a page uses that
+ * convention, every unmarked question is required.
+ */
+export function applyOptionalConvention<T extends { label: string; required: boolean }>(fields: T[]): T[] {
+  if (!fields.some((f) => OPTIONAL.test(f.label))) return fields;
+  return fields.map((f) => ({ ...f, required: !OPTIONAL.test(f.label) }));
 }
 
 /** Fills one field with a human pace. Returns false if the page refused the value. */

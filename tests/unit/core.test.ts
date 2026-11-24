@@ -259,3 +259,18 @@ describe('browser choice', () => {
     expect(channelsToTry('msedge', 'win32')).toEqual(['msedge']);
   });
 });
+
+import { applyOptionalConvention } from '../../src/browser/dom';
+describe('"(opcional)" convention (Indeed, LinkedIn, Lever)', () => {
+  it('unmarked questions become required when the page marks the optional ones', () => {
+    const out = applyOptionalConvention([
+      { label: 'Pretensão salarial', required: false },
+      { label: 'Link do portfólio (opcional)', required: false },
+      { label: 'Cover letter (Optional)', required: true },
+    ]);
+    expect(out.map((f) => f.required)).toEqual([true, false, false]);
+  });
+  it('pages without the convention keep their own marks', () => {
+    expect(applyOptionalConvention([{ label: 'Nome', required: false }])[0]!.required).toBe(false);
+  });
+});

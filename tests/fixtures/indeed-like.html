@@ -1,0 +1,27 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Desenvolvedor Front-end Júnior - Empresa Z | Indeed</title></head>
+<body>
+<header role="banner"><form><label for="text-input-what">O quê</label><input id="text-input-what" name="q"><label for="text-input-where">Onde</label><input id="text-input-where" name="l"><button>Achar vagas</button></form></header>
+<h1>Desenvolvedor Front-end Júnior</h1><div data-testid="company-name">Empresa Z</div>
+<div id="jobDescriptionText">Remoto. CLT. React, TypeScript, HTML, CSS, Git, Jest.</div>
+<button id="indeedApplyButton" onclick="go(1)">Candidatar-se</button>
+<main id="app"></main>
+<script>
+const steps = {
+ 1: `<h2>Adicione um currículo</h2>
+     <div data-testid="IndeedResumeCard-indicator" role="button">Currículo do Indeed</div>
+     <input type="file" id="resume-upload" style="display:none">
+     <button onclick="go(2)">Continuar</button>`,
+ 2: `<h2>Perguntas do empregador</h2>
+     <div class="ia-Questions-item"><label for="q1">Qual sua pretensão salarial?</label><input id="q1"></div>
+     <div class="ia-Questions-item"><label for="q2">Quantos anos de experiência você tem com React?</label><input id="q2" type="number"></div>
+     <div class="ia-Questions-item"><label for="q3">Link do portfólio (opcional)</label><input id="q3"></div>
+     <div class="ia-Questions-item"><fieldset><legend>Você tem parentes ou amigos trabalhando na empresa?</legend>
+        <label><input type="radio" name="q4" value="1">Sim</label><label><input type="radio" name="q4" value="0">Não</label></fieldset></div>
+     <div class="ia-Questions-item"><label for="q5">Qual seu esporte favorito?</label><input id="q5"></div>
+     <button onclick="check()">Continuar</button>`,
+ 3: `<h2>Revise sua candidatura</h2><button onclick="document.body.innerHTML='<h1>Sua candidatura foi enviada</h1>'">Enviar sua candidatura</button>`,
+};
+function go(n){ document.getElementById('indeedApplyButton')?.remove(); document.getElementById('jobDescriptionText')?.remove(); document.getElementById('app').innerHTML = steps[n]; }
+function check(){ const ok = ['q1','q2','q5'].every(id=>document.getElementById(id).value) && document.querySelector('input[name=q4]:checked'); if (ok) go(3); }
+</script>
+</body></html>
