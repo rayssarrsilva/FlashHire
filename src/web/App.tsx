@@ -104,7 +104,7 @@ export function App() {
         ))}
       </nav>
       <main className="content">
-        {tab === 'inbox' && <Inbox pendings={state.pendings} onError={notify} />}
+        {tab === 'inbox' && <Inbox pendings={state.pendings} onError={notify} onInfo={setToast} />}
         {tab === 'queue' && <Queue tick={tick} onError={notify} onInfo={setToast} />}
         {tab === 'bank' && <Bank tick={tick} onError={notify} onInfo={setToast} />}
         {tab === 'resumes' && <Resumes onError={notify} onChange={refresh} />}
@@ -161,7 +161,7 @@ function Lock({ setUp, onDone }: { setUp: boolean; onDone: () => void }) {
   );
 }
 
-function Inbox({ pendings, onError }: { pendings: Pending[]; onError: (e: unknown) => void }) {
+function Inbox({ pendings, onError, onInfo }: { pendings: Pending[]; onError: (e: unknown) => void; onInfo: (m: string) => void }) {
   if (pendings.length === 0)
     return (
       <Empty title="Nada esperando por você">Quando uma vaga precisar de você (login, captcha, pergunta nova ou o clique final), ela aparece aqui e eu sigo com as outras.</Empty>
@@ -169,13 +169,13 @@ function Inbox({ pendings, onError }: { pendings: Pending[]; onError: (e: unknow
   return (
     <div className="stack">
       {pendings.map((p) => (
-        <PendingCard key={p.id} p={p} onError={onError} />
+        <PendingCard key={p.id} p={p} onError={onError} onInfo={onInfo} />
       ))}
     </div>
   );
 }
 
-function PendingCard({ p, onError }: { p: Pending; onError: (e: unknown) => void }) {
+function PendingCard({ p, onError, onInfo }: { p: Pending; onError: (e: unknown) => void; onInfo: (m: string) => void }) {
   const [answers, setAnswers] = useState<Record<string, string>>(() => Object.fromEntries(p.questions.map((q) => [q.fieldId, q.suggestion ?? ''])));
   const [save, setSave] = useState(true);
   const reply = (done: 'continue' | 'submitted' | 'skip') =>
@@ -188,7 +188,14 @@ function PendingCard({ p, onError }: { p: Pending; onError: (e: unknown) => void
           <h3>{p.jobTitle}</h3>
           {p.company && <p className="muted">{p.company}</p>}
         </div>
-        <button className="ghost" onClick={() => api(`/pendings/${p.id}/focus`, 'POST').catch(onError)}>
+        <button
+          className="ghost"
+          onClick={() =>
+            api<{ title: string; url: string }>(`/pendings/${p.id}/focus`, 'POST')
+              .then((t) => onInfo(`Trouxe para a frente a janela do Chrome do FlashHire: "${t.title || t.url}". Se não apareceu, procure o ícone do Chrome na barra de tarefas.`))
+              .catch(onError)
+          }
+        >
           Mostrar a aba
         </button>
       </div>

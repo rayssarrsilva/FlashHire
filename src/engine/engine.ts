@@ -204,8 +204,29 @@ export class Engine extends EventEmitter {
     this.emit('change');
   }
 
-  async focus(pendingId: string): Promise<void> {
-    await this.waiters.get(pendingId)?.page.bringToFront();
+  /**
+   * Brings the job's tab AND its Chrome window to the front. bringToFront() alone only
+   * switches tabs inside Chrome; Windows keeps the window behind the dashboard.
+   */
+  async focus(pendingId: string): Promise<{ title: string; url: string }> {
+    const w = this.waiters.get(pendingId);
+    if (!w) throw new Error('Esta pendência já foi resolvida.');
+    const page = w.page;
+    if (page.isClosed()) throw new Error('A aba desta vaga foi fechada. Clique em "Pular vaga" e coloque o link na fila de novo.');
+    await page.bringToFront();
+    try {
+      const cdp = await page.context().newCDPSession(page);
+      const { windowId } = (await cdp.send('Browser.getWindowForTarget')) as { windowId: number };
+      const { bounds } = (await cdp.send('Browser.getWindowBounds', { windowId })) as { bounds: { windowState?: string } };
+      const back = bounds.windowState === 'maximized' || bounds.windowState === 'fullscreen' ? bounds.windowState : 'normal';
+      await cdp.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'minimized' } });
+      await cdp.send('Browser.setWindowBounds', { windowId, bounds: { windowState: back } });
+      await cdp.detach();
+      await page.bringToFront();
+    } catch {
+      // Window control is not available (e.g. headless): the tab is still active.
+    }
+    return { title: await page.title().catch(() => ''), url: page.url() };
   }
 
   private waitUser(job: JobRow, kind: WaitKind, message: string, page: Page, fields: FoundField[] = [], suggestions: Record<string, string> = {}): Promise<UserReply> {

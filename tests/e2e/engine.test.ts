@@ -125,6 +125,8 @@ describe('FlashHire engine on local pages', () => {
     // While she has not answered, the second job keeps going on its own.
     await until(() => pendings.some((p) => p.jobId !== q.jobId));
 
+    const shown = await engine.focus(q.id);
+    expect(shown.url).toContain('easy-apply.html');
     engine.reply(q.id, { done: 'continue', answers: { [q.questions[0]!.fieldId]: 'Pipoca' } });
     const submit = await until(() => pendings.find((p) => p.kind === 'submit' && p.jobId === q.jobId));
     engine.reply(submit.id, { done: 'submitted' });

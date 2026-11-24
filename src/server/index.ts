@@ -171,8 +171,7 @@ app.post('/api/pendings/:id/reply', { preHandler: needUnlocked }, async (req) =>
   return { ok: true };
 });
 app.post('/api/pendings/:id/focus', { preHandler: needUnlocked }, async (req) => {
-  await engine.focus((req.params as { id: string }).id);
-  return { ok: true };
+  return engine.focus((req.params as { id: string }).id);
 });
 
 // ---------- answer bank ----------
