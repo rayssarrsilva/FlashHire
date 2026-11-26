@@ -19,7 +19,10 @@ import { isIgnorableButton, isKnownButton, setLearnedButtons, type FoundField } 
 import { lessonsFrom, startRecording, stopRecording } from '../browser/recorder';
 import { extractJob } from '../browser/extract';
 import { NORMAL_PACE, pause, type Pace } from '../browser/human';
-import { browserName, htmlToPdf, openContext, resumeToPdf, type BrowserChoice, type BrowserOptions } from '../browser/session';
+import { browserName, channelsToTry, htmlToPdf, openContext, profilePath, resumeToPdf, type BrowserChoice, type BrowserOptions } from '../browser/session';
+import { findExecutable, LOGIN_PLATFORMS, openLoginWindow, platformsFor } from '../browser/login-window';
+import type { ChildProcess } from 'node:child_process';
+import type { SiteId } from '../core/types';
 
 export interface Settings extends MatchSettings {
   maxParallel: number;
@@ -84,8 +87,23 @@ export interface EngineOptions {
   context?: BrowserContext;
 }
 
+/** Thrown when a job lands on a login page of a platform whose session is missing or expired. */
+class LoginNeeded extends Error {
+  constructor(readonly sites: SiteId[]) {
+    super('login');
+  }
+}
+
+export interface LoginStatus {
+  site: SiteId;
+  label: string;
+  queued: number;
+  ok: boolean;
+}
+
 export class Engine extends EventEmitter {
   private ctx: BrowserContext | null;
+  private loginWindow: ChildProcess | null = null;
   private running = false;
   private active = 0;
   private waiters = new Map<string, Waiter>();
@@ -134,13 +152,92 @@ export class Engine extends EventEmitter {
     return { added, duplicates, warnings };
   }
 
+  // ---------- logins (before the run) ----------
+  private loggedIn(): Set<SiteId> {
+    return new Set(this.store.getJson('logins.ok', { sites: [] as SiteId[] }).sites);
+  }
+
+  setLoggedIn(sites: SiteId[], ok: boolean): void {
+    const set = this.loggedIn();
+    for (const s of sites) ok ? set.add(s) : set.delete(s);
+    this.store.setJson('logins.ok', { sites: [...set] });
+    this.emit('change');
+    this.pump();
+  }
+
+  /** Platforms with jobs in the queue that need a login, and whether she already signed in. */
+  loginStatus(): LoginStatus[] {
+    const queued = this.store.queuedBySite();
+    const ok = this.loggedIn();
+    const out = new Map<SiteId, LoginStatus>();
+    for (const [site, n] of Object.entries(queued) as [SiteId, number][]) {
+      for (const p of platformsFor(site)) {
+        const cur = out.get(p) ?? { site: p, label: LOGIN_PLATFORMS[p]!.label, queued: 0, ok: ok.has(p) };
+        cur.queued += n;
+        out.set(p, cur);
+      }
+    }
+    return [...out.values()];
+  }
+
+  get loginWindowOpen(): boolean {
+    return this.loginWindow !== null;
+  }
+
+  /** Opens a normal (not automated) browser window on FlashHire's profile with the login pages. */
+  async openLogins(sites?: SiteId[]): Promise<{ browser: string }> {
+    if (this.active > 0 || this.waiters.size > 0) throw new Error('Pause e espere as vagas em andamento terminarem antes de abrir os logins.');
+    this.stop();
+    if (this.ctx) {
+      await this.ctx.close().catch(() => {});
+      this.ctx = null;
+    }
+    const wanted = sites?.length ? sites : this.loginStatus().map((l) => l.site);
+    const list = wanted.length ? wanted : (Object.keys(LOGIN_PLATFORMS) as SiteId[]);
+    const urls = list.flatMap((s) => LOGIN_PLATFORMS[s]?.urls ?? []);
+    for (const s of list) if (s === 'gupy') urls.push(...this.gupyCompanyLogins());
+    const exe = findExecutable(channelsToTry(this.opts.browser.channel ?? this.settings.browser), this.opts.browser.executablePath);
+    if (!exe) throw new Error('Não encontrei o Edge nem o Chrome instalados.');
+    const child = openLoginWindow(exe.path, profilePath(join(this.opts.dataDir, 'browser-profiles'), exe.channel), urls);
+    this.loginWindow = child;
+    child.on('exit', () => {
+      if (this.loginWindow === child) this.loginWindow = null;
+      this.emit('notice', 'Janela de login fechada. Marque as plataformas em que você entrou e clique em Iniciar.');
+      this.emit('change');
+    });
+    this.emit('change');
+    return { browser: exe.channel === 'msedge' ? 'Edge' : 'Chrome' };
+  }
+
+  /** Gupy keeps one login per company portal: open the auth page of the companies in the queue (up to 5). */
+  private gupyCompanyLogins(): string[] {
+    const hosts = new Set<string>();
+    for (const j of this.store.jobs(1000)) {
+      if (j.site !== 'gupy' || j.status !== 'queued') continue;
+      try {
+        hosts.add(new URL(j.openUrl).host);
+      } catch {
+        /* ignore */
+      }
+    }
+    return [...hosts].slice(0, 5).map((h) => `https://${h}/candidates/auth`);
+  }
+
   async start(): Promise<void> {
     if (this.running) return;
     if (!this.store.isUnlocked) throw new Error('Desbloqueie o cofre primeiro.');
     if (this.store.resumes().length === 0) throw new Error('Adicione pelo menos 1 currículo.');
+    if (this.loginWindow) throw new Error('A janela de login ainda está aberta. Feche essa janela do navegador e clique em Iniciar de novo.');
     if (!this.ctx) {
       this.ctx = await openContext({ ...this.opts.browser, channel: this.opts.browser.channel ?? this.settings.browser, profileDir: join(this.opts.dataDir, 'browser-profiles') });
-      this.emit('notice', `Abri o ${browserName()} do FlashHire. Na primeira vez, faça login nele no LinkedIn, na Gupy e no Indeed.`);
+      await this.checkSessions();
+      const missing = this.loginStatus().filter((l) => !l.ok);
+      this.emit(
+        'notice',
+        missing.length
+          ? `Abri o ${browserName()} do FlashHire. Vagas de ${missing.map((m) => m.label).join(', ')} esperam você entrar nessas plataformas (botão "Abrir janela de login"); sigo com as outras.`
+          : `Abri o ${browserName()} do FlashHire.`,
+      );
       this.ctx.on('close', () => {
         this.ctx = null;
         this.running = false;
@@ -150,6 +247,13 @@ export class Engine extends EventEmitter {
     this.running = true;
     this.emit('change');
     this.pump();
+  }
+
+  /** LinkedIn's session cookie is easy to check: if it is gone, ask for the login again. */
+  private async checkSessions(): Promise<void> {
+    if (!this.ctx || !this.loggedIn().has('linkedin')) return;
+    const cookies = await this.ctx.cookies('https://www.linkedin.com').catch(() => []);
+    if (!cookies.some((c) => c.name === 'li_at')) this.setLoggedIn(['linkedin'], false);
   }
 
   stop(): void {
@@ -167,7 +271,9 @@ export class Engine extends EventEmitter {
         this.emit('change');
         return;
       }
-      const job = this.store.nextQueued();
+      const ok = this.loggedIn();
+      const waitingLogin = (Object.keys(this.store.queuedBySite()) as SiteId[]).filter((site) => platformsFor(site).some((p) => !ok.has(p)));
+      const job = this.store.nextQueued(waitingLogin);
       if (!job) return;
       if (job.site === 'linkedin' && this.store.appliedToday('linkedin') >= s.linkedinDailyCap) {
         this.store.updateJob(job.id, { status: 'skipped', note: `Limite diário do LinkedIn (${s.linkedinDailyCap}) atingido. Volte a colocar na fila amanhã.` });
@@ -381,6 +487,11 @@ export class Engine extends EventEmitter {
         pace: this.pace,
         log,
         waitUser: async (kind, message, p, fields) => {
+          if (kind === 'login') {
+            const site = detectSite(p.url()).site;
+            const lost = [...new Set([...platformsFor(site), ...platformsFor(job.site)])];
+            if (lost.length) throw new LoginNeeded(lost);
+          }
           const suggestions: Record<string, string> = {};
           for (const f of fields ?? []) {
             const a = resolveAnswer(f, { bank, job: analysis, siteLabel: siteLabel(job.site), company: info.company });
@@ -401,6 +512,14 @@ export class Engine extends EventEmitter {
       this.store.updateJob(job.id, { status: outcome.status, note: outcome.note, ...(outcome.status === 'submitted' ? { applied: true } : {}) });
       log(outcome.note);
     } catch (e) {
+      if (e instanceof LoginNeeded) {
+        const labels = e.sites.map((x) => LOGIN_PLATFORMS[x]?.label ?? x).join(' e ');
+        this.setLoggedIn(e.sites, false);
+        this.store.updateJob(job.id, { status: 'queued', note: `Esperando você entrar no ${labels}` });
+        log(`Pediu login no ${labels}: a vaga volta para a fila até você entrar`);
+        this.emit('notice', `A sessão no ${labels} não está ativa. Pause, clique em "Abrir janela de login" e entre de novo. Sigo com as vagas de outros sites.`);
+        return;
+      }
       const msg = e instanceof Error ? e.message.split('\n')[0]! : String(e);
       this.store.updateJob(job.id, { status: 'failed', note: msg });
       log(`Erro: ${msg}`);

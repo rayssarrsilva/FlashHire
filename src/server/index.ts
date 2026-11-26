@@ -153,6 +153,16 @@ app.post('/api/jobs/:id/interview', { preHandler: needUnlocked }, async (req) =>
   return { ok: true };
 });
 
+// ---------- logins (before the run) ----------
+const Sites = z.array(z.enum(['linkedin', 'gupy', 'indeed', 'glassdoor']));
+app.get('/api/logins', { preHandler: needUnlocked }, async () => ({ platforms: engine.loginStatus(), windowOpen: engine.loginWindowOpen }));
+app.post('/api/logins/open', { preHandler: needUnlocked }, async (req) => engine.openLogins(Sites.optional().parse((req.body as { sites?: unknown } | undefined)?.sites)));
+app.post('/api/logins/mark', { preHandler: needUnlocked }, async (req) => {
+  const b = z.object({ sites: Sites, ok: z.boolean() }).parse(req.body);
+  engine.setLoggedIn(b.sites, b.ok);
+  return { ok: true };
+});
+
 app.post('/api/engine/start', { preHandler: needUnlocked }, async () => {
   await engine.start();
   return { ok: true };

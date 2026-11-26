@@ -284,3 +284,16 @@ describe('company sites keep the job id from the query', () => {
     expect(a.jobKey).toBe(c.jobKey);
   });
 });
+
+import { executableCandidates, platformsFor } from '../../src/browser/login-window';
+describe('logins before the run', () => {
+  it('Glassdoor jobs need Glassdoor and Indeed; company sites need none', () => {
+    expect(platformsFor('glassdoor')).toEqual(['glassdoor', 'indeed']);
+    expect(platformsFor('linkedin')).toEqual(['linkedin']);
+    expect(platformsFor('greenhouse')).toEqual([]);
+  });
+  it('finds Edge in the usual Windows folders', () => {
+    const c = executableCandidates('msedge', 'win32', { PROGRAMFILES: 'C:\\\\Program Files', 'PROGRAMFILES(X86)': 'C:\\\\Program Files (x86)' });
+    expect(c.some((p) => p.includes('Edge') && p.endsWith('msedge.exe'))).toBe(true);
+  });
+});

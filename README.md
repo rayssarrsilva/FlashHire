@@ -34,7 +34,7 @@ npm start
 ```
 On Windows you can double-click `INICIAR-FlashHire.bat`. The app opens at http://127.0.0.1:4173 and only your computer can reach it.
 
-First run: create a master password → add your résumés → import your answer bank → (optional) paste free AI keys in Settings → add job links → **Start**. A browser window (Edge or Chrome) opens: sign in to LinkedIn, Gupy and Indeed once, when asked.
+First run: create a master password → add your résumés → import your answer bank → (optional) paste free AI keys in Settings → add job links → **Open login window**: a normal Edge/Chrome window (not automated) opens with the login pages of the platforms in your queue; sign in ("Sign in with Google" works there), close it, tick "Already signed in" → **Start**. Google blocks sign-in inside automated browsers, so logins always happen before the run and FlashHire reuses the saved sessions.
 
 ## Tests
 ```bash

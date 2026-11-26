@@ -196,6 +196,21 @@ describe('FlashHire engine on local pages', () => {
     expect(store.statsBySite()[0]!.autonomous).toBe(1);
   });
 
+  it('holds jobs of platforms without login, and sends a job back to the queue if its session expired', async () => {
+    const { store, engine } = makeEngine();
+    const gupy = store.addJob({ url: `${base}/login.html`, openUrl: `${base}/login.html`, site: 'gupy', variant: 'direct', jobKey: 'gupy:test:1' });
+    engine.addLinks([`${base}/ats-single.html?z`]);
+    expect(engine.loginStatus()).toEqual([{ site: 'gupy', label: 'Gupy', queued: 2 - 1, ok: false }]);
+    await engine.start();
+    await until(() => store.jobs().find((j) => j.url.endsWith('?z'))?.status === 'submitted');
+    expect(store.job(gupy.id)!.status).toBe('queued'); // waited: no Gupy login yet
+
+    engine.setLoggedIn(['gupy'], true);
+    await until(() => store.job(gupy.id)!.note?.includes('Esperando você entrar no Gupy'));
+    expect(store.job(gupy.id)!.status).toBe('queued');
+    expect(engine.loginStatus()[0]!.ok).toBe(false);
+  });
+
   it('skips jobs below the threshold or blocked by the on-site rule, and never applies twice', async () => {
     const { store, engine } = makeEngine({ threshold: 101 });
     const r = engine.addLinks([`${base}/ats-single.html`, `${base}/ats-single.html`]);

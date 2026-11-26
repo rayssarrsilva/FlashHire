@@ -87,6 +87,7 @@ export function App() {
           </button>
         </div>
       </header>
+      <Logins tick={tick} onError={notify} onInfo={setToast} running={state.running} />
       <nav className="tabs" role="tablist">
         {(
           [
@@ -117,6 +118,81 @@ export function App() {
         </div>
       )}
     </div>
+  );
+}
+
+type LoginRow = { site: 'linkedin' | 'gupy' | 'indeed' | 'glassdoor'; label: string; queued: number; ok: boolean };
+
+function Logins({ tick, onError, onInfo, running }: { tick: number; onError: (e: unknown) => void; onInfo: (m: string) => void; running: boolean }) {
+  const [data, setData] = useState<{ platforms: LoginRow[]; windowOpen: boolean }>({ platforms: [], windowOpen: false });
+  const [open, setOpen] = useState(false);
+  const load = useCallback(() => api<typeof data>('/logins').then(setData).catch(() => {}), []);
+  useEffect(() => {
+    void load();
+  }, [tick, load]);
+  const missing = data.platforms.filter((p) => !p.ok);
+  if (data.platforms.length === 0) return null;
+  const mark = (sites: LoginRow['site'][], ok: boolean) => api('/logins/mark', 'POST', { sites, ok }).then(load).catch(onError);
+  const openWindow = (sites: LoginRow['site'][]) =>
+    api<{ browser: string }>('/logins/open', 'POST', { sites })
+      .then((r) => {
+        onInfo(`Abri uma janela normal do ${r.browser} com as páginas de login. Entre em cada uma (pode usar "Entrar com o Google"), feche a janela e marque aqui.`);
+        void load();
+      })
+      .catch(onError);
+
+  if (missing.length === 0 && !open && !data.windowOpen) {
+    return (
+      <p className="logins-ok small">
+        ✓ Logins prontos: {data.platforms.map((p) => p.label).join(', ')} ·{' '}
+        <button className="link" onClick={() => setOpen(true)}>
+          refazer um login
+        </button>
+      </p>
+    );
+  }
+  return (
+    <section className="card logins" aria-labelledby="logins-title">
+      <div className="row">
+        <h2 id="logins-title">{missing.length ? 'Antes de iniciar: entre nas plataformas' : 'Logins'}</h2>
+        {missing.length === 0 && (
+          <button className="ghost small" onClick={() => setOpen(false)}>
+            Fechar
+          </button>
+        )}
+      </div>
+      <p className="muted small">
+        O Google bloqueia "Entrar com o Google" em navegador controlado por programa. Por isso o login é feito antes, numa janela normal do navegador que eu só abro. As sessões ficam salvas e eu
+        envio pelas contas já logadas. Vagas de plataformas sem login esperam na fila; as outras seguem.
+      </p>
+      {data.windowOpen && <p className="pill">Janela de login aberta: quando terminar, feche-a e marque abaixo</p>}
+      <ul className="plain">
+        {data.platforms.map((p) => (
+          <li key={p.site} className="row">
+            <span>
+              <strong>{p.label}</strong> · {p.queued} vaga(s) · <span className={`pill ${p.ok ? 'on' : 'st-waiting'}`}>{p.ok ? 'Pronto' : 'Falta entrar'}</span>
+            </span>
+            <span className="nowrap">
+              <button className="ghost small" disabled={running} onClick={() => openWindow([p.site])}>
+                Abrir login
+              </button>
+              <label className="check small">
+                <input type="checkbox" checked={p.ok} onChange={(e) => mark([p.site], e.target.checked)} /> Já entrei
+              </label>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="actions">
+        <button className="primary" disabled={running || missing.length === 0} onClick={() => openWindow(missing.map((m) => m.site))}>
+          Abrir janela de login ({missing.length})
+        </button>
+        <button disabled={missing.length === 0} onClick={() => mark(missing.map((m) => m.site), true)}>
+          Já entrei em todas
+        </button>
+      </div>
+      {running && <p className="muted small">Para abrir a janela de login, pause primeiro.</p>}
+    </section>
   );
 }
 

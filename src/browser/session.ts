@@ -26,6 +26,11 @@ export function channelsToTry(choice: BrowserChoice = 'auto', platform = process
 
 let resolved: 'msedge' | 'chrome' | null = null;
 
+/** Folder of FlashHire's profile for a browser (the login window and the run share it). */
+export function profilePath(profileDir: string, channel: 'msedge' | 'chrome'): string {
+  return join(profileDir, channel);
+}
+
 /** Name shown to the candidate ("Edge" / "Chrome"). */
 export function browserName(): string {
   return resolved === 'msedge' ? 'Edge' : resolved === 'chrome' ? 'Chrome' : 'navegador';
@@ -53,7 +58,11 @@ export async function openContext(o: BrowserOptions): Promise<BrowserContext> {
       await ctx.addInitScript({ content: EVALUATE_SHIM });
       return ctx;
     } catch (e) {
-      errors.push(`${channel}: ${(e as Error).message.split('\n')[0]}`);
+      const msg = (e as Error).message;
+      if (/ProcessSingleton|user data directory is already in use|SingletonLock|profile.*in use/i.test(msg)) {
+        throw new Error('A janela de login ainda está aberta. Feche essa janela do navegador e clique em Iniciar de novo.');
+      }
+      errors.push(`${channel}: ${msg.split('\n')[0]}`);
     }
   }
   throw new Error(`Não consegui abrir o navegador (${errors.join(' | ')}). Escolha Edge ou Chrome em Ajustes.`);

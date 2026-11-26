@@ -272,9 +272,17 @@ export class Store {
     return (this.db.prepare('SELECT * FROM jobs ORDER BY id DESC LIMIT ?').all(limit) as Record<string, unknown>[]).map(toJob);
   }
 
-  nextQueued(): JobRow | null {
-    const r = this.db.prepare("SELECT * FROM jobs WHERE status = 'queued' ORDER BY id LIMIT 1").get() as Record<string, unknown> | undefined;
+  /** Next job in line, skipping sites that are waiting for a login. */
+  nextQueued(skipSites: string[] = []): JobRow | null {
+    const marks = skipSites.map(() => '?').join(',');
+    const sql = `SELECT * FROM jobs WHERE status = 'queued'${skipSites.length ? ` AND site NOT IN (${marks})` : ''} ORDER BY id LIMIT 1`;
+    const r = this.db.prepare(sql).get(...skipSites) as Record<string, unknown> | undefined;
     return r ? toJob(r) : null;
+  }
+
+  queuedBySite(): Record<string, number> {
+    const rows = this.db.prepare("SELECT site, COUNT(*) AS n FROM jobs WHERE status = 'queued' GROUP BY site").all() as { site: string; n: number }[];
+    return Object.fromEntries(rows.map((r) => [r.site, r.n]));
   }
 
   updateJob(id: number, patch: Partial<Pick<JobRow, 'status' | 'title' | 'company' | 'score' | 'match' | 'resumeId' | 'tailoredPath' | 'letter' | 'note' | 'interview'>> & { applied?: boolean }): void {
